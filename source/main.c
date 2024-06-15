@@ -1,5 +1,7 @@
 #include "ftps4.h"
 
+#include <ps5/payload_main.h>
+
 #include <ps5/libkernel.h>
 #include <ps5/kernel.h>
 
@@ -581,6 +583,9 @@ int get_ip_address(char *ip_address)
 }
 
 int payload_main(struct payload_args *args) {
+	
+	
+	
     dlsym_t* dlsym = args->dlsym;
 
 	int libKernel = 0x2001;
@@ -663,12 +668,134 @@ int payload_main(struct payload_args *args) {
 	dlsym(libNetCtl, "sceNetCtlTerm", &f_sceNetCtlTerm);
 	dlsym(libNetCtl, "sceNetCtlGetInfo", &f_sceNetCtlGetInfo);
 	
+	int sock;
+	int ret;
+	struct sockaddr_in addr;
+    uint64_t authmgr_handle;
+    struct OrbisKernelSwVersion version;
+    struct tailored_offsets offsets;
+
+	// Open a debug socket to log to PC
+	sock = socket(AF_INET, SOCK_STREAM, 0);
+	if (sock < 0) {
+		return -1;
+	}
+
+	inet_pton(AF_INET, PC_IP, &addr.sin_addr);
+	addr.sin_family = AF_INET;
+	addr.sin_len    = sizeof(addr);
+	addr.sin_port   = htons(PC_PORT);
+
+	ret = connect(sock, (const struct sockaddr *) &addr, sizeof(addr));
+	if (ret < 0) {
+		return -1;
+	}
+
+    // Initialize dump hex area
+    g_hexbuf = mmap(NULL, 0x10000, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    if (g_hexbuf == NULL) {
+        SOCK_LOG(sock, "[!] failed to allocate hex dump area\n");
+        goto out;
+    }
+
+    // Initialize bump allocator
+    g_bump_allocator_len  = 0x100000;
+    g_bump_allocator_base = mmap(NULL, g_bump_allocator_len, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    if (g_bump_allocator_base == NULL) {
+        SOCK_LOG(sock, "[!] failed to allocate backing space for bump allocator\n");
+        goto out;
+    }
+
+    g_bump_allocator_cur = g_bump_allocator_base;
+
+    // Initialize dirent buffer
+    g_dirent_buf = mmap(NULL, 6 * 0x10000, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    if (g_dirent_buf == NULL || g_dirent_buf == -1) {
+        SOCK_LOG(sock, "[!] failed to allocate buffer for directory entries\n");
+        goto out;
+    }
+
+	// Print basic info
+    SOCK_LOG(sock, "[+] kernel .data base is %p, pipe %d->%d, rw pair %d->%d, pipe addr is %p\n",
+             args->kdata_base_addr, args->rwpipe[0], args->rwpipe[1], args->rwpair[0], args->rwpair[1], args->kpipe_addr);
+
+	// Initialize kernel read/write helpers
+	kernel_init_rw(args->rwpair[0], args->rwpair[1], args->rwpipe, args->kpipe_addr);
+    g_kernel_data_base = args->kdata_base_addr;
+
+    // Tailor
+    sceKernelGetProsperoSystemSwVersion(&version);
+    SOCK_LOG(sock, "[+] firmware version 0x%x (%s)\n", version.version, version.version_str);
+
+    // See README for porting notes
+    switch (version.version) {
+    case 0x3000038:
+    case 0x3100003:
+    case 0x3200004:
+    case 0x3210000:
+        offsets.offset_authmgr_handle = 0xC9EE50;
+        offsets.offset_sbl_mb_mtx     = 0x2712A98;
+        offsets.offset_mailbox_base   = 0x2712AA0;
+        offsets.offset_sbl_sxlock     = 0x2712AA8;
+        offsets.offset_mailbox_flags  = 0x2CF5F98;
+        offsets.offset_mailbox_meta   = 0x2CF5D38;
+        offsets.offset_dmpml4i        = 0x31BE4A0;
+        offsets.offset_dmpdpi         = 0x31BE4A4;
+        offsets.offset_pml4pml4i      = 0x31BE1FC;
+        offsets.offset_datacave_1     = 0x4270000;
+        offsets.offset_datacave_2     = 0x4280000;
+        break;
+    case 0x4000042:
+    case 0x4030000:
+    case 0x4500005:
+    case 0x4510001:
+        offsets.offset_authmgr_handle = 0xD0FBB0;
+        offsets.offset_sbl_mb_mtx     = 0x2792AB8;
+        offsets.offset_mailbox_base   = 0x2792AC0;
+        offsets.offset_sbl_sxlock     = 0x2792AC8;
+        offsets.offset_mailbox_flags  = 0x2D8DFC0;
+        offsets.offset_mailbox_meta   = 0x2D8DD60;
+        offsets.offset_dmpml4i        = 0x3257D00;
+        offsets.offset_dmpdpi         = 0x3257D04;
+        offsets.offset_pml4pml4i      = 0x3257A5C;
+        offsets.offset_datacave_1     = 0x4270000;
+        offsets.offset_datacave_2     = 0x4280000;
+        break;
+    default:
+        SOCK_LOG(sock, "[!] unsupported firmware, dumping then bailing!\n");
+        char *dump_buf = mmap(NULL, 0x7800 * 0x1000, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+
+        for (int pg = 0; pg < 0x7800; pg++) {
+            kernel_copyout(g_kernel_data_base + (pg * 0x1000), dump_buf + (pg * 0x1000), 0x1000);
+        }
+
+        int dump_fd = _open("/mnt/usb0/PS5/data_dump.bin", O_WRONLY | O_CREAT, 0644);
+        _write(dump_fd, dump_buf, 0x7800 * 0x1000);
+        _close(dump_fd);
+        SOCK_LOG(sock, "  [+] dumped\n");
+        goto out;
+    }
+
+    // Initialize SBL offsets
+    init_sbl(
+        g_kernel_data_base,
+        offsets.offset_dmpml4i,
+        offsets.offset_dmpdpi,
+        offsets.offset_pml4pml4i,
+        offsets.offset_mailbox_base,
+        offsets.offset_mailbox_flags,
+        offsets.offset_mailbox_meta,
+        offsets.offset_sbl_mb_mtx);
+
+    authmgr_handle = get_authmgr_sm(sock, &offsets);
+    SOCK_LOG(sock, "[+] got auth manager: %p\n", authmgr_handle);
+	
 	// Init netdebug
 	
 	
 	char ip_address[16];
 
-	int ret = get_ip_address(ip_address);
+	ret = get_ip_address(ip_address);
 	if (ret < 0)
 	{
 		printf_notification("Unable to get IP address");
@@ -685,9 +812,10 @@ int payload_main(struct payload_args *args) {
 			f_sceKernelUsleep(100 * 1000);
 		
 	}
-
+out:
 	ftp_fini();
 
+	f_close(sock);
 
 	return 0;
 }

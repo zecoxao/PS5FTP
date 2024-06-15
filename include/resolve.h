@@ -114,12 +114,7 @@ extern int netdbg_sock;
 
 typedef int dlsym_t(int, const char*, void*);
 
-struct payload_args
-{
-    dlsym_t* dlsym;
-    int *rwpipe;
-    int *payloadout;
-};
+
 
 #define debug(...) \
 	do { \
