@@ -3,7 +3,7 @@ AS      := clang
 ODIR    := build
 SDIR    := source
 IDIRS   := -I. -Iinclude
-LDIRS   := -L. -Llib
+LDIRS   := -L. -Llib -lps5sdk_crt
 CFLAGS  := $(IDIRS) -fno-builtin -nostdlib -Wall -m64 -fPIC -mcmodel=small -DPS5_FW_VERSION=0x451
 SFLAGS  := -fno-builtin -nostartfiles -nostdlib -fPIC -mcmodel=small
 LFLAGS  := $(LDIRS) -Xlinker -T linker.x -Wl,--build-id=none
