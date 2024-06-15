@@ -79,7 +79,8 @@ typeof(sceNetGetsockname) * f_sceNetGetsockname;
 typeof(sceNetErrnoLoc) * f_sceNetErrnoLoc;
 typeof(sceNetRecv) * f_sceNetRecv;
 typeof(sceNetSetsockopt) * f_sceNetSetsockopt;
-typeof(memset) * f_memset;
+void	*memset2(void *, int, size_t);
+typeof(memset2) * memset;
 typeof(sprintf) * f_sprintf;
 typeof(snprintf) * f_snprintf;
 typeof(snprintf_s) * f_snprintf_s;
@@ -127,5 +128,5 @@ struct payload_args
 		f_sceNetSend(netdbg_sock, debug_buffer, size, 0); \
 	} while(0)
 
-#define DEBUG(...) debug(__VA_ARGS__)
+#define DEBUG2(...) debug(__VA_ARGS__)
 #define INFO(...) debug(__VA_ARGS__)

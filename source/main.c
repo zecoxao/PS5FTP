@@ -1,5 +1,7 @@
 #include "ftps4.h"
 
+
+
 int netdbg_sock;
 
 // https://github.com/OSM-Made/PS4-Notify
@@ -102,7 +104,7 @@ int payload_main(struct payload_args *args) {
 
 	int libC = f_sceKernelLoadStartModule("libSceLibcInternal.sprx", 0, 0, 0, 0, 0);
 	dlsym(libC, "vsprintf", &f_vsprintf);
-	dlsym(libC, "memset", &f_memset);
+	dlsym(libC, "memset", &memset);
 	dlsym(libC, "sprintf", &f_sprintf);
 	dlsym(libC, "snprintf", &f_snprintf);
 	dlsym(libC, "snprintf_s", &f_snprintf_s);
