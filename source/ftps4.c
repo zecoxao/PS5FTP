@@ -7,7 +7,48 @@
 
 #define UNUSED(x) (void)(x)
 
+#define SELF_MAGIC	0x5414F5EE
+#define ELF_MAGIC	0x464C457F
 
+
+
+int is_self(const char *fn)
+{
+    struct stat st;
+    int res = 0;
+    int fd = f_open(fn, O_RDONLY, 0);
+    if (fd != -1) {
+        stat(fn, &st);
+        void *addr = f_mmap(0, 0x4000, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+        if (addr != MAP_FAILED) {
+            //DEBUG2("mmap %s : %p\n", fn, addr);
+            if (st.st_size >= 4)
+            {
+                uint32_t selfMagic = *(uint32_t*)((uint8_t*)addr + 0x00);
+                if (selfMagic == SELF_MAGIC)
+                {
+                    uint16_t snum = *(uint16_t*)((uint8_t*)addr + 0x18);
+                    if (st.st_size >= (0x20 + snum * 0x20 + 4))
+                    {
+                        uint32_t elfMagic = *(uint32_t*)((uint8_t*)addr + 0x20 + snum * 0x20);
+                        if ((selfMagic == SELF_MAGIC) && (elfMagic == ELF_MAGIC))
+                            res = 1;
+                    }
+                }
+            }
+            f_munmap(addr, 0x4000);
+        }
+        else {
+            //DEBUG2("mmap file %s err : %s\n", fn, strerror(errno));
+        }
+        f_close(fd);
+    }
+    else {
+        //DEBUG2("open %s err : %s\n", fn, strerror(errno));
+    }
+
+    return res;
+}
 
 void ftp_fini();
 
@@ -565,7 +606,18 @@ static void cmd_RETR_func(ClientInfo *client)
 {
 	char dest_path[PATH_MAX];
 	gen_filepath(client, dest_path);
-	send_file(client, dest_path);
+	int out_fd = f_open("/user/temp.self", O_WRONLY | O_CREAT, 0644);
+	if(is_self(dest_path))
+	{
+		//decrypt_self(int sock, uint64_t authmgr_handle, char *path, int out_fd, struct tailored_offsets *offsets)
+		decrypt_self(sock,authmgr_handle, dest_path, out_fd, &offsets);
+		send_file(client, "/user/temp.self");
+		f_unlink("/user/temp.self");
+	}
+	else
+	{
+		send_file(client, dest_path);
+	}
 }
 
 static void receive_file(ClientInfo *client, const char *path)

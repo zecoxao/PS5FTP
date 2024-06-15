@@ -13,20 +13,11 @@
 #define PC_IP   "10.0.3.3"
 #define PC_PORT 5655
 
-struct tailored_offsets
-{
-    uint64_t offset_dmpml4i;
-    uint64_t offset_dmpdpi;
-    uint64_t offset_pml4pml4i;
-    uint64_t offset_mailbox_base;
-    uint64_t offset_mailbox_flags;
-    uint64_t offset_mailbox_meta;
-    uint64_t offset_authmgr_handle;
-    uint64_t offset_sbl_sxlock;
-    uint64_t offset_sbl_mb_mtx;
-    uint64_t offset_datacave_1;
-    uint64_t offset_datacave_2;
-};
+
+
+extern int sock;
+extern uint64_t authmgr_handle;
+extern struct tailored_offsets offsets;
 
 uint64_t g_kernel_data_base;
 char *g_bump_allocator_base;
@@ -668,15 +659,15 @@ int payload_main(struct payload_args *args) {
 	dlsym(libNetCtl, "sceNetCtlTerm", &f_sceNetCtlTerm);
 	dlsym(libNetCtl, "sceNetCtlGetInfo", &f_sceNetCtlGetInfo);
 	
-	int sock;
+	
 	int ret;
 	struct sockaddr_in addr;
-    uint64_t authmgr_handle;
+	
     struct OrbisKernelSwVersion version;
-    struct tailored_offsets offsets;
+    
 
 	// Open a debug socket to log to PC
-	sock = socket(AF_INET, SOCK_STREAM, 0);
+	sock = f_socket(AF_INET, SOCK_STREAM, 0);
 	if (sock < 0) {
 		return -1;
 	}
@@ -692,7 +683,7 @@ int payload_main(struct payload_args *args) {
 	}
 
     // Initialize dump hex area
-    g_hexbuf = mmap(NULL, 0x10000, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    g_hexbuf = f_mmap(NULL, 0x10000, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (g_hexbuf == NULL) {
         SOCK_LOG(sock, "[!] failed to allocate hex dump area\n");
         goto out;
@@ -700,7 +691,7 @@ int payload_main(struct payload_args *args) {
 
     // Initialize bump allocator
     g_bump_allocator_len  = 0x100000;
-    g_bump_allocator_base = mmap(NULL, g_bump_allocator_len, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    g_bump_allocator_base = f_mmap(NULL, g_bump_allocator_len, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (g_bump_allocator_base == NULL) {
         SOCK_LOG(sock, "[!] failed to allocate backing space for bump allocator\n");
         goto out;
@@ -709,7 +700,7 @@ int payload_main(struct payload_args *args) {
     g_bump_allocator_cur = g_bump_allocator_base;
 
     // Initialize dirent buffer
-    g_dirent_buf = mmap(NULL, 6 * 0x10000, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    g_dirent_buf = f_mmap(NULL, 6 * 0x10000, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (g_dirent_buf == NULL || g_dirent_buf == -1) {
         SOCK_LOG(sock, "[!] failed to allocate buffer for directory entries\n");
         goto out;
@@ -763,15 +754,15 @@ int payload_main(struct payload_args *args) {
         break;
     default:
         SOCK_LOG(sock, "[!] unsupported firmware, dumping then bailing!\n");
-        char *dump_buf = mmap(NULL, 0x7800 * 0x1000, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+        char *dump_buf = f_mmap(NULL, 0x7800 * 0x1000, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 
         for (int pg = 0; pg < 0x7800; pg++) {
             kernel_copyout(g_kernel_data_base + (pg * 0x1000), dump_buf + (pg * 0x1000), 0x1000);
         }
 
-        int dump_fd = _open("/mnt/usb0/PS5/data_dump.bin", O_WRONLY | O_CREAT, 0644);
-        _write(dump_fd, dump_buf, 0x7800 * 0x1000);
-        _close(dump_fd);
+        int dump_fd = f_open("/mnt/usb0/PS5/data_dump.bin", O_WRONLY | O_CREAT, 0644);
+        f_write(dump_fd, dump_buf, 0x7800 * 0x1000);
+        f_close(dump_fd);
         SOCK_LOG(sock, "  [+] dumped\n");
         goto out;
     }
