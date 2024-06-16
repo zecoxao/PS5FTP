@@ -706,12 +706,13 @@ int payload_main(struct payload_args *args) {
     g_kernel_data_base = args->kdata_base_addr;
 	printf_notification("Kernel Initialized");
 
-
-    // Tailor
-    //f_sceKernelGetProsperoSystemSwVersion(&version);
-    //printf_notification("firmware version 0x%x %s", version.version, version.version_str);
-	
 /*	
+	//TODO : Needs Fixing
+    // Tailor
+    f_sceKernelGetProsperoSystemSwVersion(&version);
+    printf_notification("firmware version 0x%x %s", version.version, version.version_str);
+	
+
     // See README for porting notes
     switch (version.version) {
     case 0x3000038:
