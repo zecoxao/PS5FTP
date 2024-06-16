@@ -434,7 +434,7 @@ static void send_LIST(ClientInfo *client, const char *path)
 			
 			dent = (struct dirent *)((void *)dent + dent->d_reclen);
 				
-			memset(buffer, 0, sizeof(buffer));
+			f_memset(buffer, 0, sizeof(buffer));
 				
 		}
 	}
@@ -544,7 +544,7 @@ static void dir_up(char *path)
 	pch = f_strrchr(path, '/');
 	if (pch) {
 		size_t s = len_in - (pch - path);
-		memset(pch + 1, '\0', s);
+		f_memset(pch + 1, '\0', s);
 	}
 }
 
@@ -904,7 +904,7 @@ static void *client_thread(void *arg)
 
 	while (1) {
 
-		memset(client->recv_buffer, 0, sizeof(client->recv_buffer));
+		f_memset(client->recv_buffer, 0, sizeof(client->recv_buffer));
 
 		client->n_recv = f_sceNetRecv(client->ctrl_sockfd, client->recv_buffer, sizeof(client->recv_buffer), 0);
 		if (client->n_recv > 0) {
