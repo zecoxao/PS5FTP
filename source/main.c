@@ -10,7 +10,7 @@
 #include "self.h"
 #include "elf.h"
 
-#define PC_IP   "10.0.3.3"
+#define PC_IP   "10.0.0.136"
 #define PC_PORT 5655
 
 void* ptr_syscall;
@@ -25,6 +25,24 @@ char *g_bump_allocator_cur;
 uint64_t g_bump_allocator_len;
 char *g_hexbuf;
 char *g_dirent_buf;
+
+// https://github.com/OSM-Made/PS4-Notify
+void printf_notification(const char* fmt, ...) {
+    SceNotificationRequest noti_buffer;
+
+    va_list args;
+    va_start(args, fmt);
+    f_vsprintf(noti_buffer.message, fmt, args);
+    va_end(args);
+
+    noti_buffer.type = 0;
+    noti_buffer.unk3 = 0;
+    noti_buffer.use_icon_image_uri = 1;
+    noti_buffer.target_id = -1;
+    f_strcpy(noti_buffer.uri, "cxml://psnotification/tex_icon_system");
+
+    f_sceKernelSendNotificationRequest(0, (SceNotificationRequest * ) & noti_buffer, sizeof(noti_buffer), 0);
+}
 
 void *bump_alloc(uint64_t len)
 {
@@ -315,7 +333,7 @@ int decrypt_self(int sock, uint64_t authmgr_handle, char *path, int out_fd, stru
     // Open SELF file for reading
     self_file_fd = _open(path, 0, 0);
     if (self_file_fd < 0) {
-        SOCK_LOG(sock, "[!] failed to open %s\n", path);
+        printf_notification("failed to open %s\n", path);
         f_close(out_fd);
         return self_file_fd;
     }
@@ -324,12 +342,12 @@ int decrypt_self(int sock, uint64_t authmgr_handle, char *path, int out_fd, stru
     self_file_data = mmap(NULL, self_file_stat.st_size, PROT_READ, MAP_SHARED, self_file_fd, 0);
 
     if (*(uint32_t *) (self_file_data) != SELF_PROSPERO_MAGIC) {
-        SOCK_LOG(sock, "[!] %s is not a PS5 SELF file\n", path);
+        printf_notification("%s is not a PS5 SELF file\n", path);
         err = -22;
         goto cleanup_in_file_data;
     }
 
-    SOCK_LOG(sock, "[+] decrypting %s...\n", path);
+    printf_notification("[+] decrypting %s...\n", path);
 
     // Verify SELF header and get a context handle
     header = (struct sce_self_header *) self_file_data;
@@ -341,7 +359,7 @@ int decrypt_self(int sock, uint64_t authmgr_handle, char *path, int out_fd, stru
         offsets);
 
     if (service_id < 0) {
-        SOCK_LOG(sock, "[!] failed to acquire a service ID\n");
+        printf_notification("failed to acquire a service ID");
         err = -1;
         goto cleanup_in_file_data;
     }
@@ -363,7 +381,7 @@ int decrypt_self(int sock, uint64_t authmgr_handle, char *path, int out_fd, stru
 
     if (final_file_size == 0) {
         // Second chance: fallback on latest LOAD segment size
-        SOCK_LOG(sock, "  [?] file segments are irregular, falling back on last LOAD segment\n");
+        printf_notification("  [?] file segments are irregular, falling back on last LOAD segment");
 
         cur_phdr = start_phdrs;
         for (int i = 0; i < elf_header->e_phnum; i++) {
@@ -405,7 +423,7 @@ int decrypt_self(int sock, uint64_t authmgr_handle, char *path, int out_fd, stru
         if (SELF_SEGMENT_HAS_DIGESTS(segment)) {
             target_segment = (struct sce_self_segment_header *) (self_file_data +
                 sizeof(struct sce_self_header) + (SELF_SEGMENT_ID(segment) * sizeof(struct sce_self_segment_header)));
-            SOCK_LOG(sock, "  [?] decrypting block info segment for %d\n", SELF_SEGMENT_ID(target_segment));
+            printf_notification("  [?] decrypting block info segment for %d\n", SELF_SEGMENT_ID(target_segment));
             block_segments[SELF_SEGMENT_ID(segment)] = self_decrypt_segment(
                 sock,
                 authmgr_handle,
@@ -417,7 +435,7 @@ int decrypt_self(int sock, uint64_t authmgr_handle, char *path, int out_fd, stru
             );
 
             if (block_segments[SELF_SEGMENT_ID(segment)] == NULL) {
-                SOCK_LOG(sock, "[!] failed to decrypt segment info for segment %d\n", SELF_SEGMENT_ID(segment));
+                printf_notification("failed to decrypt segment info for segment %d\n", SELF_SEGMENT_ID(segment));
                 err = -11;
                 goto cleanup_out_file_data;
             }
@@ -426,10 +444,10 @@ int decrypt_self(int sock, uint64_t authmgr_handle, char *path, int out_fd, stru
 
     /*for (int i = 0; i < header->segment_count; i++) {
         if (block_segments[i]) {
-            SOCK_LOG(sock, "decrypted info segment for seg=0x%02x (%d blocks)\n", i, block_segments[i]->block_count);
+            printf_notification("decrypted info segment for seg=0x%02x (%d blocks)\n", i, block_segments[i]->block_count);
 
             for (int j = 0; j < block_segments[i]->block_count; j++) {
-                SOCK_LOG(sock, "  block #%04d, extent (offset: 0x%08x, len: 0x%08x), digest:\n",
+                printf_notification("  block #%04d, extent (offset: 0x%08x, len: 0x%08x), digest:\n",
                          j,
                          block_segments[i]->extents[j]->offset,
                          block_segments[i]->extents[j]->len);
@@ -459,7 +477,7 @@ int decrypt_self(int sock, uint64_t authmgr_handle, char *path, int out_fd, stru
         // Get block info for this segment
         block_info = block_segments[i];
         if (block_info == NULL) {
-            SOCK_LOG(sock, "[!] we don't have block info for segment %d\n", i);
+            printf_notification("we don't have block info for segment %d\n", i);
             continue;
         }
 
@@ -474,7 +492,7 @@ int decrypt_self(int sock, uint64_t authmgr_handle, char *path, int out_fd, stru
         tail_block_size = segment->uncompressed_size % SELF_SEGMENT_BLOCK_SIZE(segment);
 
         for (int block = 0; block < block_info->block_count; block++) {
-            SOCK_LOG(sock, "  [?] decrypting segment=%d, block=%d/%d\n", i, block + 1, block_info->block_count);
+            printf_notification("  [?] decrypting segment=%d, block=%d/%d\n", i, block + 1, block_info->block_count);
             block_data[block] = self_decrypt_block(
                 sock,
                 authmgr_handle,
@@ -488,7 +506,7 @@ int decrypt_self(int sock, uint64_t authmgr_handle, char *path, int out_fd, stru
             );
 
             if (block_data[block] == NULL) {
-                SOCK_LOG(sock, "[!] failed to decrypt block %d\n", block);
+                printf_notification("failed to decrypt block %d\n", block);
                 err = -11;
                 goto cleanup_out_file_data;
             }
@@ -509,11 +527,11 @@ int decrypt_self(int sock, uint64_t authmgr_handle, char *path, int out_fd, stru
 
     written_bytes = _write(out_fd, out_file_data, final_file_size);
     if (written_bytes != final_file_size) {
-        SOCK_LOG(sock, "[!] failed to dump to file, %d != %d (%d).\n", written_bytes, final_file_size, errno);
+        printf_notification("failed to dump to file, %d != %d (%d).\n", written_bytes, final_file_size, errno);
         err = -5;
     }
 
-    SOCK_LOG(sock, "  [+] wrote 0x%08x bytes...\n", written_bytes);
+    printf_notification("  [+] wrote 0x%08x bytes...\n", written_bytes);
 
 cleanup_out_file_data:
     munmap(out_file_data, final_file_size);
@@ -531,23 +549,7 @@ cleanup_in_file_data:
 
 int netdbg_sock;
 
-// https://github.com/OSM-Made/PS4-Notify
-void printf_notification(const char* fmt, ...) {
-    SceNotificationRequest noti_buffer;
 
-    va_list args;
-    va_start(args, fmt);
-    f_vsprintf(noti_buffer.message, fmt, args);
-    va_end(args);
-
-    noti_buffer.type = 0;
-    noti_buffer.unk3 = 0;
-    noti_buffer.use_icon_image_uri = 1;
-    noti_buffer.target_id = -1;
-    f_strcpy(noti_buffer.uri, "cxml://psnotification/tex_icon_system");
-
-    f_sceKernelSendNotificationRequest(0, (SceNotificationRequest * ) & noti_buffer, sizeof(noti_buffer), 0);
-}
 
 int get_ip_address(char *ip_address)
 {
@@ -573,6 +575,10 @@ int get_ip_address(char *ip_address)
 	return -1;
 }
 
+
+
+
+
 int payload_main(struct payload_args *args) {
 	
 	
@@ -582,6 +588,7 @@ int payload_main(struct payload_args *args) {
 	int libKernel = 0x2001;
 
 	dlsym(libKernel, "sceKernelLoadStartModule", &f_sceKernelLoadStartModule);
+	dlsym(libKernel, "sceKernelGetProsperoSystemSwVersion",  f_sceKernelGetProsperoSystemSwVersion);
 	dlsym(libKernel, "sceKernelDebugOutText", &f_sceKernelDebugOutText);
 	dlsym(libKernel, "sceKernelSendNotificationRequest", &f_sceKernelSendNotificationRequest);
 	dlsym(libKernel, "sceKernelUsleep", &f_sceKernelUsleep);
@@ -631,6 +638,8 @@ int payload_main(struct payload_args *args) {
 	dlsym(libNet, "sceNetRecv", &f_sceNetRecv);
 	dlsym(libNet, "sceNetErrnoLoc", &f_sceNetErrnoLoc);
 	dlsym(libNet, "sceNetSetsockopt", &f_sceNetSetsockopt);
+	dlsym(libNet, "sceNetInetPton", &f_sceNetInetPton);
+	dlsym(libNet, "sceNetHtons", &f_sceNetHtons);
 
 	int libC = f_sceKernelLoadStartModule("libSceLibcInternal.sprx", 0, 0, 0, 0, 0);
 	dlsym(libC, "vsprintf", &f_vsprintf);
@@ -662,31 +671,12 @@ int payload_main(struct payload_args *args) {
 	
 	int ret;
 	
-	struct sockaddr_in addr;
-	
     struct OrbisKernelSwVersion version;
-    
-
-	// Open a debug socket to log to PC
-	sock = f_socket(AF_INET, SOCK_STREAM, 0);
-	if (sock < 0) {
-		return -1;
-	}
-
-	inet_pton(AF_INET, PC_IP, &addr.sin_addr);
-	addr.sin_family = AF_INET;
-	addr.sin_len    = sizeof(addr);
-	addr.sin_port   = htons(PC_PORT);
-
-	ret = connect(sock, (const struct sockaddr *) &addr, sizeof(addr));
-	if (ret < 0) {
-		return -1;
-	}
 
     // Initialize dump hex area
     g_hexbuf = f_mmap(NULL, 0x10000, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (g_hexbuf == NULL) {
-        SOCK_LOG(sock, "[!] failed to allocate hex dump area\n");
+        printf_notification("failed to allocate hex dump area");
         goto out;
     }
 
@@ -694,7 +684,7 @@ int payload_main(struct payload_args *args) {
     g_bump_allocator_len  = 0x100000;
     g_bump_allocator_base = f_mmap(NULL, g_bump_allocator_len, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (g_bump_allocator_base == NULL) {
-        SOCK_LOG(sock, "[!] failed to allocate backing space for bump allocator\n");
+        printf_notification("failed to allocate backing space for bump allocator");
         goto out;
     }
 
@@ -703,22 +693,25 @@ int payload_main(struct payload_args *args) {
     // Initialize dirent buffer
     g_dirent_buf = f_mmap(NULL, 6 * 0x10000, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (g_dirent_buf == NULL || g_dirent_buf == -1) {
-        SOCK_LOG(sock, "[!] failed to allocate buffer for directory entries\n");
+        printf_notification("failed to allocate buffer for directory entries");
         goto out;
     }
 
 	// Print basic info
-    SOCK_LOG(sock, "[+] kernel .data base is %p, pipe %d->%d, rw pair %d->%d, pipe addr is %p\n",
+    printf_notification("[+] kernel .data base is %p, pipe %d->%d, rw pair %d->%d, pipe addr is %p\n",
              args->kdata_base_addr, args->rwpipe[0], args->rwpipe[1], args->rwpair[0], args->rwpair[1], args->kpipe_addr);
 
 	// Initialize kernel read/write helpers
 	kernel_init_rw(args->rwpair[0], args->rwpair[1], args->rwpipe, args->kpipe_addr);
     g_kernel_data_base = args->kdata_base_addr;
+	printf_notification("Kernel Initialized");
+
 
     // Tailor
-    sceKernelGetProsperoSystemSwVersion(&version);
-    SOCK_LOG(sock, "[+] firmware version 0x%x (%s)\n", version.version, version.version_str);
-
+    f_sceKernelGetProsperoSystemSwVersion(&version);
+    printf_notification("firmware version 0x%x %s", version.version, version.version_str);
+	
+/*	
     // See README for porting notes
     switch (version.version) {
     case 0x3000038:
@@ -754,7 +747,7 @@ int payload_main(struct payload_args *args) {
         offsets.offset_datacave_2     = 0x4280000;
         break;
     default:
-        SOCK_LOG(sock, "[!] unsupported firmware, dumping then bailing!\n");
+        printf_notification("unsupported firmware, dumping then bailing!");
         char *dump_buf = f_mmap(NULL, 0x7800 * 0x1000, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 
         for (int pg = 0; pg < 0x7800; pg++) {
@@ -764,7 +757,7 @@ int payload_main(struct payload_args *args) {
         int dump_fd = f_open("/mnt/usb0/PS5/data_dump.bin", O_WRONLY | O_CREAT, 0644);
         f_write(dump_fd, dump_buf, 0x7800 * 0x1000);
         f_close(dump_fd);
-        SOCK_LOG(sock, "  [+] dumped\n");
+        printf_notification("  [+] dumped");
         goto out;
     }
 
@@ -778,10 +771,12 @@ int payload_main(struct payload_args *args) {
         offsets.offset_mailbox_flags,
         offsets.offset_mailbox_meta,
         offsets.offset_sbl_mb_mtx);
+		
+	
 
     authmgr_handle = get_authmgr_sm(sock, &offsets);
-    SOCK_LOG(sock, "[+] got auth manager: %p\n", authmgr_handle);
-	
+    printf_notification("got auth manager: %p\n", authmgr_handle);
+*/	
 	// Init netdebug
 	
 	

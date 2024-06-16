@@ -16,6 +16,7 @@
 #include <time.h>
 #include <dirent.h>
 #include <sys/mman.h>
+#include <arpa/inet.h>
 #include <orbis/libkernel.h>
 #include <orbis/libSceNet.h>
 #include <orbis/libSceLibcInternal.h>
@@ -29,12 +30,23 @@
 
 #define MNT_UPDATE 0x0000000000010000ULL
 
+//_Fn_(uint64_t   , sceKernelGetProsperoSystemSwVersion,          struct OrbisKernelSwVersion *);
+
+struct OrbisKernelSwVersion {
+    uint64_t pad0;
+    char version_str[0x1C];
+    uint32_t version;
+    uint64_t pad1;
+};
+
 int (*f_sceNetCtlInit)(void);
 void (*f_sceNetCtlTerm)(void);
 int (*f_sceNetCtlGetInfo)(int code, SceNetCtlInfo *info);
 
 int *sceNetErrnoLoc(void);
+int *sceKernelGetProsperoSystemSwVersion (struct OrbisKernelSwVersion * version);
 
+typeof(sceKernelGetProsperoSystemSwVersion) *f_sceKernelGetProsperoSystemSwVersion;
 typeof(sceKernelLoadStartModule)* f_sceKernelLoadStartModule;
 typeof(sceKernelDebugOutText)* f_sceKernelDebugOutText;
 typeof(sceKernelUsleep)* f_sceKernelUsleep;
@@ -82,6 +94,8 @@ typeof(sceNetGetsockname) * f_sceNetGetsockname;
 typeof(sceNetErrnoLoc) * f_sceNetErrnoLoc;
 typeof(sceNetRecv) * f_sceNetRecv;
 typeof(sceNetSetsockopt) * f_sceNetSetsockopt;
+typeof(sceNetInetPton) * f_sceNetInetPton;
+typeof(sceNetHtons) * f_sceNetHtons;
 typeof(memset) * f_memset;
 typeof(sprintf) * f_sprintf;
 typeof(snprintf) * f_snprintf;

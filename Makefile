@@ -4,7 +4,7 @@ ODIR    := build
 SDIR    := source
 IDIRS   := -I. -Iinclude
 LDIRS   := -L. -Llib -lps5sdk_crt
-CFLAGS  := $(IDIRS) -fno-builtin -nostdlib -Wall -m64 -fPIC -mcmodel=small -DPS5_FW_VERSION=0x451
+CFLAGS  := $(IDIRS) --target=x86_64-freebsd-pc-elf -O0 -DPPR -DPS5 -DPS5_FW_VERSION=0x451 -D_POSIX_SOURCE -D_POSIX_C_SOURCE=200112 -D__BSD_VISIBLE=1 -D__XSI_VISIBLE=500 -fno-builtin -nostdlib -Wall -m64 -fomit-frame-pointer -fPIC -fPIE -pie -Wl,-z,norelro
 SFLAGS  := -fno-builtin -nostartfiles -nostdlib -fPIC -mcmodel=small
 LFLAGS  := $(LDIRS) -Xlinker -T linker.x -Wl,--build-id=none
 CFILES  := $(wildcard $(SDIR)/*.c)

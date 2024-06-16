@@ -12,7 +12,9 @@ PHDRS
 	 */
 
 	ph_text PT_LOAD FLAGS (0x1 | 0x4);
+	ph_relro PT_LOAD FLAGS (0x4);
 	ph_data PT_LOAD FLAGS (0x2 | 0x4);
+	ph_dyn PT_DYNAMIC FLAGS(0x2 | 0x4);
 }
 
 SECTIONS
@@ -32,6 +34,23 @@ SECTIONS
 	.rodata :
 	{
 		*(.rodata .rodata.*)
+	}
+
+	.eh_frame :
+	{
+		*(.eh_frame.*)
+	}
+
+	. = ALIGN(0x4000);
+
+	.data.rel.ro :
+	{
+		*(.data.rel.ro .data.rel.ro.*)
+	} : ph_relro
+
+	.rela :
+	{
+		*(.rela *.rela.*)
 
 		. = ALIGN(4);
 	}
@@ -60,4 +79,24 @@ SECTIONS
 		. = . + 4;
 		. = ALIGN(4);
 	} : ph_data
+
+	.dynamic :
+	{
+		*(.dynamic)
+	} : ph_dyn
+
+	.dynstr :
+	{
+		*(.dynstr)
+	}
+
+	.dynsym :
+	{
+		*(.dynsym)
+	}
+
+	.rela.dyn :
+	{
+		*(.rela.dyn)
+	}
 }

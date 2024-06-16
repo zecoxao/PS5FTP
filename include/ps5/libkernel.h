@@ -21,12 +21,7 @@
 typedef void *ScePthread;
 typedef void *ScePthreadAttr;
 
-struct OrbisKernelSwVersion {
-    uint64_t pad0;
-    char version_str[0x1C];
-    uint32_t version;
-    uint64_t pad1;
-};
+
 
 int libkernel_init();
 
