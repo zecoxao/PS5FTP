@@ -708,8 +708,8 @@ int payload_main(struct payload_args *args) {
 
 
     // Tailor
-    f_sceKernelGetProsperoSystemSwVersion(&version);
-    printf_notification("firmware version 0x%x %s", version.version, version.version_str);
+    //f_sceKernelGetProsperoSystemSwVersion(&version);
+    //printf_notification("firmware version 0x%x %s", version.version, version.version_str);
 	
 /*	
     // See README for porting notes
