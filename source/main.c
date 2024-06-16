@@ -13,7 +13,7 @@
 #define PC_IP   "10.0.3.3"
 #define PC_PORT 5655
 
-
+void* ptr_syscall;
 
 extern int sock;
 extern uint64_t authmgr_handle;
@@ -37,7 +37,7 @@ void *bump_alloc(uint64_t len)
     g_bump_allocator_cur += len;
 
     // Zero init to avoid stupid bugs
-    (void)memset(ptr, 0, len);
+    (void)f_memset(ptr, 0, len);
 
     return ptr;
 }
@@ -59,8 +59,8 @@ void sock_print(int sock, char *str)
 {
 	size_t size;
 
-	size = strlen(str);
-	_write(sock, str, size);
+	size = f_strlen(str);
+	f_write(sock, str, size);
 }
 
 static void _mkdir(const char *dir) {
@@ -68,17 +68,17 @@ static void _mkdir(const char *dir) {
     char *p = NULL;
     size_t len;
 
-    snprintf(tmp, sizeof(tmp),"%s",dir);
-    len = strlen(tmp);
+    f_snprintf(tmp, sizeof(tmp),"%s",dir);
+    len = f_strlen(tmp);
     if (tmp[len - 1] == '/')
         tmp[len - 1] = 0;
     for (p = tmp + 1; *p; p++)
         if (*p == '/') {
             *p = 0;
-            mkdir(tmp, 0777);
+            f_mkdir(tmp, 0777);
             *p = '/';
         }
-    mkdir(tmp, 0777);
+    f_mkdir(tmp, 0777);
 }
 
 uint64_t get_authmgr_sm(int sock, struct tailored_offsets *offsets)
@@ -634,7 +634,7 @@ int payload_main(struct payload_args *args) {
 
 	int libC = f_sceKernelLoadStartModule("libSceLibcInternal.sprx", 0, 0, 0, 0, 0);
 	dlsym(libC, "vsprintf", &f_vsprintf);
-	dlsym(libC, "memset", &memset);
+	dlsym(libC, "memset", &f_memset);
 	dlsym(libC, "sprintf", &f_sprintf);
 	dlsym(libC, "snprintf", &f_snprintf);
 	dlsym(libC, "snprintf_s", &f_snprintf_s);
@@ -661,6 +661,7 @@ int payload_main(struct payload_args *args) {
 	
 	
 	int ret;
+	
 	struct sockaddr_in addr;
 	
     struct OrbisKernelSwVersion version;

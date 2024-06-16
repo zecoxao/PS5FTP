@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/fcntl.h>
+#include <sys/syscall.h>
 #include <netinet/in.h>
 #include <stddef.h>
 #include <unistd.h>
@@ -25,6 +26,8 @@
 #define SCE_NET_ERROR_EINTR 0x80410104
 #define SCE_NET_SOL_SOCKET 0xffff
 #define UNUSED(x) (void)(x)
+
+#define MNT_UPDATE 0x0000000000010000ULL
 
 int (*f_sceNetCtlInit)(void);
 void (*f_sceNetCtlTerm)(void);
@@ -99,6 +102,10 @@ typeof(gmtime_s) * f_gmtime_s;
 typeof(time) * f_time;
 typeof(localtime) * f_localtime;
 typeof(vsprintf) * f_vsprintf;
+typeof(realloc) * f_realloc;
+typeof(strdup) * f_strdup;
+
+extern long f_syscall(unsigned long n, ...);
 
 
 
